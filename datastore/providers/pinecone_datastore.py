@@ -126,7 +126,7 @@ class PineconeDataStore(DataStore):
             try:
                 # Query the index with the query embedding, filter, and top_k
                 query_response = self.index.query(
-                    namespace=namespace,
+                    namespace="mwai",
                     top_k=query.top_k,
                     vector=query.embedding,
                     filter=pinecone_filter,
