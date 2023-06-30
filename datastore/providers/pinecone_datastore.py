@@ -120,15 +120,13 @@ class PineconeDataStore(DataStore):
         async def _single_query(query: QueryWithEmbedding) -> QueryResult:
             logger.debug(f"Query: {query.query}")
 
-            logger.debug(f"Query Namespace: {query.namespace}")
-
             # Convert the metadata filter object to a dict with pinecone filter expressions
             pinecone_filter = self._get_pinecone_filter(query.filter)
 
             try:
                 # Query the index with the query embedding, filter, and top_k
                 query_response = self.index.query(
-                    namespace=query.namespace,
+                    # namespace=namespace,
                     top_k=query.top_k,
                     vector=query.embedding,
                     filter=pinecone_filter,
