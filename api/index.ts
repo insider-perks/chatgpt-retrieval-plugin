@@ -5,7 +5,7 @@ const nodeFetch = require('node-fetch');
 const app = express();
 const port = process.env.PORT || 3000;
 
-let browser: any;
+let browser: { close: () => void; };
 
 // Initialize Puppeteer browser instance
 async function initBrowser() {
@@ -29,89 +29,28 @@ async function loadSVG(svgUrl: any) {
     }
 }
 
-// Function to generate the full HTML content including the SVG
-function createHTMLContent(svgContent: any, location: any) {
-    return `
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <title>Interactive Resort Map</title>
-            <style>
-                #mapContainer svg {
-                    width: 100%;
-                    max-width: 800px;
-                    height: auto;
-                    display: block;
-                    margin: 0 auto;
-                }
-                #${location} {
-                    fill: red !important;
-                }
-            </style>
-        </head>
-        <body>
-            <div id="mapContainer">
-                ${svgContent}
-            </div>
-        </body>
-        </html>       
-    `;
+// Function to directly manipulate SVG content
+function modifySVG(svgContent: string, location: any) {
+    return svgContent.replace(/id="([^"]*?)"/g, (match, id) => {
+        // Apply style changes directly within SVG where the ID matches
+        if (id === location) {
+            return `id="${id}" style="fill: red !important;"`;
+        }
+        return match;
+    });
 }
 
-// Function to capture a screenshot of the SVG
-async function getSVGMap(page: any, htmlContent: any, svgSelector: any) {
-    try {
-        await page.setContent(htmlContent);
-        await page.evaluate(() => document.fonts.ready);
-        await page.waitForSelector(svgSelector, { visible: true });
-
-        const dimensions = await page.evaluate((selector: any) => {
-            const element = document.querySelector(selector);
-            if (!element) {
-                throw new Error("SVG element not found");
-            }
-            return {
-                width: element.clientWidth || element.getBoundingClientRect().width,
-                height: element.clientHeight || element.getBoundingClientRect().height
-            };
-        }, svgSelector);
-
-        await page.setViewport({
-            width: dimensions.width,
-            height: dimensions.height,
-            deviceScaleFactor: 1,
-        });
-
-        return await page.screenshot({
-            clip: { x: 0, y: 0, width: dimensions.width, height: dimensions.height },
-        });
-    } catch (error: any) {
-        console.error('Error during screenshot capture:', error.message);
-        return null;
-    }
-}
-
-app.get('/SVG-Map', async (req: any, res: any) => {
-    let page;
+app.get('/SVG-Map', async (req: { query: { svgUrl: any; location: any; }; }, res: { set: (arg0: string, arg1: string) => void; send: (arg0: string) => void; status: (arg0: number) => { (): any; new(): any; json: { (arg0: { error: string; }): void; new(): any; }; }; }) => {
     try {
         const { svgUrl, location } = req.query;
-        page = await browser.newPage();
         const svgContent = await loadSVG(svgUrl);
-        const htmlContent = createHTMLContent(svgContent, location);
-        const screenshotBuffer = await getSVGMap(page, htmlContent, '#mapContainer');
+        const modifiedSVGContent = modifySVG(svgContent, location);
 
-        if (screenshotBuffer) {
-            res.set('Content-Type', 'image/png');
-            res.send(screenshotBuffer);
-        } else {
-            res.status(500).json({ error: 'Failed to capture screenshot' });
-        }
+        res.set('Content-Type', 'image/svg+xml');
+        res.send(modifiedSVGContent);
     } catch (error) {
         console.error('Error during request:', error);
         res.status(500).json({ error: 'Unexpected error' });
-    } finally {
-        if (page) await page.close();
     }
 });
 

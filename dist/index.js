@@ -39,90 +39,27 @@ function loadSVG(svgUrl) {
         }
     });
 }
-// Function to generate the full HTML content including the SVG
-function createHTMLContent(svgContent, location) {
-    return `
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <title>Interactive Resort Map</title>
-            <style>
-                #mapContainer svg {
-                    width: 100%;
-                    max-width: 800px;
-                    height: auto;
-                    display: block;
-                    margin: 0 auto;
-                }
-                #${location} {
-                    fill: red !important;
-                }
-            </style>
-        </head>
-        <body>
-            <div id="mapContainer">
-                ${svgContent}
-            </div>
-        </body>
-        </html>       
-    `;
-}
-// Function to capture a screenshot of the SVG
-function getSVGMap(page, htmlContent, svgSelector) {
-    return __awaiter(this, void 0, void 0, function* () {
-        try {
-            yield page.setContent(htmlContent);
-            yield page.evaluate(() => document.fonts.ready);
-            yield page.waitForSelector(svgSelector, { visible: true });
-            const dimensions = yield page.evaluate((selector) => {
-                const element = document.querySelector(selector);
-                if (!element) {
-                    throw new Error("SVG element not found");
-                }
-                return {
-                    width: element.clientWidth || element.getBoundingClientRect().width,
-                    height: element.clientHeight || element.getBoundingClientRect().height
-                };
-            }, svgSelector);
-            yield page.setViewport({
-                width: dimensions.width,
-                height: dimensions.height,
-                deviceScaleFactor: 1,
-            });
-            return yield page.screenshot({
-                clip: { x: 0, y: 0, width: dimensions.width, height: dimensions.height },
-            });
+// Function to directly manipulate SVG content
+function modifySVG(svgContent, location) {
+    return svgContent.replace(/id="([^"]*?)"/g, (match, id) => {
+        // Apply style changes directly within SVG where the ID matches
+        if (id === location) {
+            return `id="${id}" style="fill: red !important;"`;
         }
-        catch (error) {
-            console.error('Error during screenshot capture:', error.message);
-            return null;
-        }
+        return match;
     });
 }
 app.get('/SVG-Map', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    let page;
     try {
         const { svgUrl, location } = req.query;
-        page = yield browser.newPage();
         const svgContent = yield loadSVG(svgUrl);
-        const htmlContent = createHTMLContent(svgContent, location);
-        const screenshotBuffer = yield getSVGMap(page, htmlContent, '#mapContainer');
-        if (screenshotBuffer) {
-            res.set('Content-Type', 'image/png');
-            res.send(screenshotBuffer);
-        }
-        else {
-            res.status(500).json({ error: 'Failed to capture screenshot' });
-        }
+        const modifiedSVGContent = modifySVG(svgContent, location);
+        res.set('Content-Type', 'image/svg+xml');
+        res.send(modifiedSVGContent);
     }
     catch (error) {
         console.error('Error during request:', error);
         res.status(500).json({ error: 'Unexpected error' });
-    }
-    finally {
-        if (page)
-            yield page.close();
     }
 }));
 const server = app.listen(port, () => __awaiter(void 0, void 0, void 0, function* () {
