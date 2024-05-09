@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Interactive Resort Map</title>
+<style>
+  #mapContainer svg {
+    width: 100%;
+    max-width: 800px;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+  }
+  .highlight {
+    fill: red;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<h1>Resort Interactive Map</h1>
+<input type="text" id="locationInput" placeholder="Enter location name">
+<input type="text" id="svgUrlInput" placeholder="Enter SVG URL">
+<button onclick="loadSVG()">Load SVG</button>
+
+<div id="mapContainer">
+    <!-- SVG will be loaded here -->
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  function highlightSite(siteId) {
+    const map = document.querySelector('#mapContainer svg');
+    if (!map) return; // If there's no SVG loaded yet
+
+    // Remove existing highlights
+    map.querySelectorAll('.highlight').forEach(function(site) {
+      site.classList.remove('highlight');
+    });
+
+    // Highlight the new site
+    const site = map.querySelector('#' + siteId);
+    if (site) {
+      site.classList.add('highlight');
+    } else {
+      alert('Location not found: ' + siteId);
+    }
+  }
+
+  window.searchLocation = function() {
+    var input = document.getElementById('locationInput').value.trim();
+    highlightSite(input);
+  };
+
+  window.loadSVG = function() {
+    var svgUrl = document.getElementById('svgUrlInput').value.trim();
+    if (!svgUrl) {
+      alert('Please enter a valid SVG URL.');
+      return;
+    }
+
+    fetch(svgUrl)
+      .then(function(response) {
+        return response.text();
+      })
+      .then(function(data) {
+        document.getElementById('mapContainer').innerHTML = data;
+      })
+      .catch(function(error) {
+        console.error('Error loading the SVG:', error);
+        alert('Failed to load SVG.');
+      });
+  };
+});
+</script>
+</body>
+</html>

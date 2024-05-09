@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: express-puppeteer-app
+    env: docker
+    dockerfilePath: ./Dockerfile
+    region: oregon
+    envVars:
+      - key: NODE_ENV
+        value: production
+    healthCheckPath: /

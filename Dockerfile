@@ -1,25 +1,89 @@
+# Use the builder stage to install dependencies and compile TypeScript
+FROM node:16-slim AS builder
 
-FROM python:3.10 as requirements-stage
+# Set the working directory in the builder stage
+WORKDIR /usr/src/app
 
-WORKDIR /tmp
+# Copy package.json and package-lock.json for npm install
+COPY package*.json ./
 
-RUN pip install poetry
+# Install dependencies, including 'typescript' and any other build tools
+RUN npm install
 
-COPY ./pyproject.toml ./poetry.lock* /tmp/
+# Copy your TypeScript configuration file
+COPY tsconfig.json ./
 
+# Copy your actual project files (ensure you include all necessary files)
+COPY . .
+RUN chmod +x ./node_modules/.bin/tsc
 
-RUN poetry export -f requirements.txt --output requirements.txt --without-hashes
+# Compile TypeScript to JavaScript
+RUN npx tsc
 
-FROM python:3.10
+# Step 2: Use a fresh image to reduce size
+FROM node:16-slim
 
-WORKDIR /code
+# Set the working directory in the production image
+WORKDIR /usr/src/app
 
-COPY --from=requirements-stage /tmp/requirements.txt /code/requirements.txt
+# Install necessary libraries for Google Chrome
+# The list of libraries is based on Puppeteer's documentation for running in Docker
+RUN apt-get update && apt-get install -y \
+    wget \
+    gnupg \
+    ca-certificates \
+    procps \
+    libxshmfence-dev \
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdbus-1-3 \
+    libdrm2 \
+    libexpat1 \
+    libgcc1 \
+    libgdk-pixbuf2.0-0 \
+    libglib2.0-0 \
+    libgtk-3-0 \
+    libpango-1.0-0 \
+    libx11-6 \
+    libx11-xcb1 \
+    libxcb1 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxext6 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libxss1 \
+    libxtst6 \
+    --no-install-recommends \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
+# Install Google Chrome Stable
+RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
+    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google.list \
+    && apt-get update \
+    && apt-get install -y google-chrome-stable \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
-COPY . /code/
+# Copy package.json and package-lock.json again in the runtime for production dependencies
+COPY package*.json ./
 
-# Heroku uses PORT, Azure App Services uses WEBSITES_PORT, Fly.io uses 8080 by default
-#CMD ["sh", "-c", "uvicorn server.main:app --host 0.0.0.0 --port ${PORT:-${WEBSITES_PORT:-8080}}"]
-CMD ["uvicorn server.main:app --host 0.0.0.0 --port ${PORT:-${WEBSITES_PORT:-8080}}"]
+# Install only production dependencies
+RUN npm ci --only=production
+
+# Copy built JavaScript files and other assets from the builder stage
+COPY --from=builder /usr/src/app/dist ./dist
+
+# Set environment variable for Puppeteer to find Chrome
+ENV PUPPETEER_EXECUTABLE_PATH /usr/bin/google-chrome-stable
+
+# Expose the port your app runs on
+EXPOSE 3001
+
+# Command to run your app
+CMD ["node", "dist/index.js"]
