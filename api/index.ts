@@ -1,4 +1,3 @@
-
 const express = require('express');
 const puppeteer = require('puppeteer');
 const nodeFetch = require('node-fetch');
@@ -6,7 +5,7 @@ const nodeFetch = require('node-fetch');
 const app = express();
 const port = process.env.PORT || 3000;
 
-let browser: { newPage: () => any; close: () => void; };
+let browser: any;
 
 // Initialize Puppeteer browser instance
 async function initBrowser() {
@@ -16,32 +15,23 @@ async function initBrowser() {
     });
 }
 
-app.get('/SVG-Map', async (req: { query: { svgUrl: any; location: any; }; }, res: { set: (arg0: string, arg1: string) => void; send: (arg0: any) => void; status: (arg0: number) => { (): any; new(): any; json: { (arg0: { error: string; }): void; new(): any; }; }; }) => {
+// Function to load SVG content from URL
+async function loadSVG(svgUrl: any) {
     try {
-        const { svgUrl, location } = req.query;
-        console.log('Requested SVG URL:', svgUrl);
-        console.log('Requested location:', location);
+        const response = await nodeFetch(svgUrl);
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        return await response.text();
+    } catch (error) {
+        console.error('Error fetching SVG:', error);
+        throw error;
+    }
+}
 
-        let svgContent = '';
-
-        // Getting SVG Content
-        const loadSVG = async (svgUrl: string): Promise<string> => {
-            try {
-                const response = await nodeFetch(svgUrl);
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
-                svgContent = await response.text();
-                return svgContent;
-            } catch (error) {
-                console.error('Error fetching SVG:', error);
-                throw error;
-            }
-        };
-
-        svgContent = await loadSVG(svgUrl);
-
-        const htmlContent = `
+// Function to generate the full HTML content including the SVG
+function createHTMLContent(svgContent: any, location: any) {
+    return `
         <!DOCTYPE html>
         <html lang="en">
         <head>
@@ -66,31 +56,16 @@ app.get('/SVG-Map', async (req: { query: { svgUrl: any; location: any; }; }, res
             </div>
         </body>
         </html>       
-        `;
+    `;
+}
 
-        const svgSelector: any = '#mapContainer';
-        const screenshotBuffer = await getSVGMap(htmlContent, svgSelector);
-
-        if (screenshotBuffer) {
-            res.set('Content-Type', 'image/png');
-            res.send(screenshotBuffer);
-        } else {
-            res.status(500).json({ error: 'Failed to capture screenshot' });
-        }
-    } catch (error) {
-        console.error('Unexpected error:', error);
-        res.status(500).json({ error: 'Unexpected error' });
-    }
-});
-
-async function getSVGMap(htmlContent: string, svgSelector: any) {
-    const page = await browser.newPage();
+// Function to capture a screenshot of the SVG
+async function getSVGMap(page: any, htmlContent: any, svgSelector: any) {
     try {
         await page.setContent(htmlContent);
         await page.evaluate(() => document.fonts.ready);
         await page.waitForSelector(svgSelector, { visible: true });
 
-        // Get the SVG dimensions
         const dimensions = await page.evaluate((selector: any) => {
             const element = document.querySelector(selector);
             if (!element) {
@@ -102,7 +77,6 @@ async function getSVGMap(htmlContent: string, svgSelector: any) {
             };
         }, svgSelector);
 
-        // Set the viewport to match SVG dimensions
         await page.setViewport({
             width: dimensions.width,
             height: dimensions.height,
@@ -115,11 +89,31 @@ async function getSVGMap(htmlContent: string, svgSelector: any) {
     } catch (error: any) {
         console.error('Error during screenshot capture:', error.message);
         return null;
-    } finally {
-        await page.close();
     }
 }
 
+app.get('/SVG-Map', async (req: any, res: any) => {
+    let page;
+    try {
+        const { svgUrl, location } = req.query;
+        page = await browser.newPage();
+        const svgContent = await loadSVG(svgUrl);
+        const htmlContent = createHTMLContent(svgContent, location);
+        const screenshotBuffer = await getSVGMap(page, htmlContent, '#mapContainer');
+
+        if (screenshotBuffer) {
+            res.set('Content-Type', 'image/png');
+            res.send(screenshotBuffer);
+        } else {
+            res.status(500).json({ error: 'Failed to capture screenshot' });
+        }
+    } catch (error) {
+        console.error('Error during request:', error);
+        res.status(500).json({ error: 'Unexpected error' });
+    } finally {
+        if (page) await page.close();
+    }
+});
 
 const server = app.listen(port, async () => {
     await initBrowser();

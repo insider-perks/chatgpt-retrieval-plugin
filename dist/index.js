@@ -23,29 +23,25 @@ function initBrowser() {
         });
     });
 }
-app.get('/SVG-Map', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const { svgUrl, location } = req.query;
-        console.log('Requested SVG URL:', svgUrl);
-        console.log('Requested location:', location);
-        let svgContent = '';
-        // Getting SVG Content
-        const loadSVG = (svgUrl) => __awaiter(void 0, void 0, void 0, function* () {
-            try {
-                const response = yield nodeFetch(svgUrl);
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
-                svgContent = yield response.text();
-                return svgContent;
+// Function to load SVG content from URL
+function loadSVG(svgUrl) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const response = yield nodeFetch(svgUrl);
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
             }
-            catch (error) {
-                console.error('Error fetching SVG:', error);
-                throw error;
-            }
-        });
-        svgContent = yield loadSVG(svgUrl);
-        const htmlContent = `
+            return yield response.text();
+        }
+        catch (error) {
+            console.error('Error fetching SVG:', error);
+            throw error;
+        }
+    });
+}
+// Function to generate the full HTML content including the SVG
+function createHTMLContent(svgContent, location) {
+    return `
         <!DOCTYPE html>
         <html lang="en">
         <head>
@@ -70,30 +66,15 @@ app.get('/SVG-Map', (req, res) => __awaiter(void 0, void 0, void 0, function* ()
             </div>
         </body>
         </html>       
-        `;
-        const svgSelector = '#mapContainer';
-        const screenshotBuffer = yield getSVGMap(htmlContent, svgSelector);
-        if (screenshotBuffer) {
-            res.set('Content-Type', 'image/png');
-            res.send(screenshotBuffer);
-        }
-        else {
-            res.status(500).json({ error: 'Failed to capture screenshot' });
-        }
-    }
-    catch (error) {
-        console.error('Unexpected error:', error);
-        res.status(500).json({ error: 'Unexpected error' });
-    }
-}));
-function getSVGMap(htmlContent, svgSelector) {
+    `;
+}
+// Function to capture a screenshot of the SVG
+function getSVGMap(page, htmlContent, svgSelector) {
     return __awaiter(this, void 0, void 0, function* () {
-        const page = yield browser.newPage();
         try {
             yield page.setContent(htmlContent);
             yield page.evaluate(() => document.fonts.ready);
             yield page.waitForSelector(svgSelector, { visible: true });
-            // Get the SVG dimensions
             const dimensions = yield page.evaluate((selector) => {
                 const element = document.querySelector(selector);
                 if (!element) {
@@ -104,7 +85,6 @@ function getSVGMap(htmlContent, svgSelector) {
                     height: element.clientHeight || element.getBoundingClientRect().height
                 };
             }, svgSelector);
-            // Set the viewport to match SVG dimensions
             yield page.setViewport({
                 width: dimensions.width,
                 height: dimensions.height,
@@ -118,11 +98,33 @@ function getSVGMap(htmlContent, svgSelector) {
             console.error('Error during screenshot capture:', error.message);
             return null;
         }
-        finally {
-            yield page.close();
-        }
     });
 }
+app.get('/SVG-Map', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    let page;
+    try {
+        const { svgUrl, location } = req.query;
+        page = yield browser.newPage();
+        const svgContent = yield loadSVG(svgUrl);
+        const htmlContent = createHTMLContent(svgContent, location);
+        const screenshotBuffer = yield getSVGMap(page, htmlContent, '#mapContainer');
+        if (screenshotBuffer) {
+            res.set('Content-Type', 'image/png');
+            res.send(screenshotBuffer);
+        }
+        else {
+            res.status(500).json({ error: 'Failed to capture screenshot' });
+        }
+    }
+    catch (error) {
+        console.error('Error during request:', error);
+        res.status(500).json({ error: 'Unexpected error' });
+    }
+    finally {
+        if (page)
+            yield page.close();
+    }
+}));
 const server = app.listen(port, () => __awaiter(void 0, void 0, void 0, function* () {
     yield initBrowser();
     console.log(`Server is running on port ${port}`);
