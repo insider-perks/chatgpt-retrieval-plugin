@@ -2,6 +2,8 @@ FROM python:3.11-slim
 
 ENV TZ=Etc/GMT
 ENV PYTHONUNBUFFERED=1
+ENV PORT=8080
+ENV FLASK_ENV=production
 
 WORKDIR /app
 
@@ -15,8 +17,9 @@ RUN apt-get update -qy && \
         python3-dev \
         && \
     pip install --no-cache-dir -r requirements.txt && \
+    pip install gunicorn && \
     rm -rf /var/cache/apt/lists
 
-EXPOSE 5000
+EXPOSE 8080
 
-CMD ["python", "main.py"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "main:app"]
