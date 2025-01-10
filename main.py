@@ -5,8 +5,25 @@ from datetime import datetime, timedelta
 from typing import List, Dict
 from google.auth.exceptions import RefreshError
 from google.api_core import exceptions as google_exceptions
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 app = Flask(__name__)
+
+# Configure Google Ads client using environment variables
+def get_google_ads_client():
+    config = {
+        'developer_token': os.getenv('GOOGLE_ADS_DEVELOPER_TOKEN'),
+        'client_id': os.getenv('GOOGLE_ADS_CLIENT_ID'),
+        'client_secret': os.getenv('GOOGLE_ADS_CLIENT_SECRET'),
+        'refresh_token': os.getenv('GOOGLE_ADS_REFRESH_TOKEN'),
+        'login_customer_id': os.getenv('GOOGLE_ADS_LOGIN_CUSTOMER_ID'),
+        'use_proto_plus': os.getenv('GOOGLE_ADS_USE_PROTO_PLUS', 'true').lower() == 'true'
+    }
+    return GoogleAdsClient.load_from_dict(config)
 
 def get_last_month_date_range():
     today = datetime.today()
@@ -70,11 +87,16 @@ def get_campaign_billing(client, customer_id: str, start_date: str, end_date: st
             "request_id": ex.request_id
         }, 400
 
+
+@app.route("/")
+def index():
+    return "Google Ads Billing API"
+
 @app.route("/customer-billing/<customer_id>", methods=['GET'])
 def get_customer_billing(customer_id):
     try:
-        # Load the Google Ads client
-        client = GoogleAdsClient.load_from_storage("google-ads.yaml")
+        # Load the Google Ads client using environment variables
+        client = get_google_ads_client()
         
         # Get date range for last month
         start_date, end_date = get_last_month_date_range()
@@ -112,8 +134,8 @@ def webhook_customer_billing():
                 "message": "customer_ids field is required"
             }, 400
 
-        # Load the Google Ads client
-        client = GoogleAdsClient.load_from_storage("google-ads.yaml")
+        # Load the Google Ads client using environment variables
+        client = get_google_ads_client()
         
         # Get date range for last month
         start_date, end_date = get_last_month_date_range()
