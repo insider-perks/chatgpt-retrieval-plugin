@@ -6,7 +6,6 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
 COPY requirements.txt .
-COPY .env .
 COPY . .
 
 RUN apt-get update -qy && \
