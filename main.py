@@ -190,4 +190,7 @@ def webhook_customer_billing():
         }, 500
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Change from default port 5000 to port specified in environment or 8080
+    port = int(os.getenv("PORT", 8080))
+    # Listen on all interfaces (0.0.0.0) instead of just localhost
+    app.run(host='0.0.0.0', port=port, debug=False)
